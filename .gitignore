@@ -1,0 +1,12 @@
+.env
+*.env
+*.key
+*.pem
+id_rsa
+id_ed25519
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+logs/
+*.log
