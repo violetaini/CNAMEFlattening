@@ -415,7 +415,7 @@ def main():
     domain = env("FLATTEN_DOMAIN", required=True)
     name = fqdn(domain, env("FLATTEN_SUBDOMAIN", "@"))
     cname = env("FLATTEN_CNAME", required=True)
-    ttl = int(env("FLATTEN_TTL", "120"))
+    ttl = int(env("FLATTEN_TTL", "1"))
     doh_url = env("FLATTEN_DOH_URL", "https://doh.pub/dns-query")
     lines = wanted_lines()
     record_types = wanted_record_types()
