@@ -313,28 +313,42 @@ def ip_version(record_type):
 
 
 def fetch_ips(doh_url, cname, record_type, subnet):
-    response = requests.get(
-        doh_url,
-        params={"name": cname, "type": record_type, "edns_client_subnet": subnet},
-        headers={"Accept": "application/dns-json"},
-        timeout=20,
-    )
-    response.raise_for_status()
-    payload = response.json()
-    if payload.get("Status") != 0:
-        raise RuntimeError(f"DoH status {payload.get('Status')} for {cname} {record_type}")
-    values = []
-    for answer in payload.get("Answer", []):
-        data = str(answer.get("data", "")).rstrip(".")
+    attempts = int_env("FLATTEN_DOH_RETRIES", 3)
+    timeout = float_env("FLATTEN_DOH_TIMEOUT", 20)
+    retry_delay = float_env("FLATTEN_DOH_RETRY_DELAY", 2)
+    for attempt in range(1, attempts + 1):
         try:
-            parsed = ipaddress.ip_address(data)
-        except ValueError:
-            continue
-        if parsed.version == ip_version(record_type) and data not in values:
-            values.append(data)
-    if not values:
-        raise RuntimeError(f"no {record_type} address in DoH answer for {cname}")
-    return values
+            response = requests.get(
+                doh_url,
+                params={"name": cname, "type": record_type, "edns_client_subnet": subnet},
+                headers={"Accept": "application/dns-json"},
+                timeout=timeout,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            if payload.get("Status") != 0:
+                raise RuntimeError(f"DoH status {payload.get('Status')} for {cname} {record_type}")
+            values = []
+            for answer in payload.get("Answer", []):
+                data = str(answer.get("data", "")).rstrip(".")
+                try:
+                    parsed = ipaddress.ip_address(data)
+                except ValueError:
+                    continue
+                if parsed.version == ip_version(record_type) and data not in values:
+                    values.append(data)
+            if not values:
+                raise RuntimeError(f"no {record_type} address in DoH answer for {cname}")
+            return values
+        except (requests.RequestException, ValueError, RuntimeError) as exc:
+            if attempt >= attempts:
+                raise
+            print(
+                f"doh retry {attempt + 1}/{attempts} "
+                f"{record_type} subnet={subnet} after {retry_delay:.0f}s "
+                f"reason={type(exc).__name__}: {exc}"
+            )
+            time.sleep(retry_delay)
 
 
 def recordsets_by_line(client, zone, record_type, name):
