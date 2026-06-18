@@ -1,41 +1,95 @@
-# CNAMEFlattening
+<div align="center">
 
-用于把 CDN CNAME 按线路解析结果同步为 DNS A/AAAA 记录。仓库包含 Python 和 Go 两类实现，并提供一个面向华为云 DNS 的可部署脚本。
+<img src="static/avatar.webp" alt="CNAMEFlattening" width="120" />
 
-## 版本说明
-本脚本支持 Python 和 Go 两种版本，其中 Python 版本支持华为云 DNS、阿里云 DNS 和 DNSPod，Go 版本支持 DNSPod、华为云。
+# **CNAMEFlattening**
 
-`deploy/huawei_flatten.py` 是当前线上使用的华为云 DNS 部署版，支持：
+[![CodeQL](https://img.shields.io/github/actions/workflow/status/violetaini/CNAMEFlattening/codeql.yml?branch=main&label=CodeQL&style=for-the-badge&logo=github)](https://github.com/violetaini/CNAMEFlattening/actions/workflows/codeql.yml)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-3776ab?style=for-the-badge&logo=python&logoColor=white)](deploy/huawei_flatten.py)
+[![Go](https://img.shields.io/badge/Go-modules-00add8?style=for-the-badge&logo=go&logoColor=white)](go/go.mod)
+[![Repo size](https://img.shields.io/github/repo-size/violetaini/CNAMEFlattening?style=for-the-badge)](https://github.com/violetaini/CNAMEFlattening)
+[![Stars](https://img.shields.io/github/stars/violetaini/CNAMEFlattening?style=for-the-badge&logo=github)](https://github.com/violetaini/CNAMEFlattening/stargazers)
+[![Forks](https://img.shields.io/github/forks/violetaini/CNAMEFlattening?style=for-the-badge&logo=github)](https://github.com/violetaini/CNAMEFlattening/forks)
 
-- 按华为云线路 ID 更新 A / AAAA 记录
-- 使用 DoH 和 ECS 子网查询 CDN 调度结果
-- 华为云限频自动等待重试
-- DoH 超时、DNS 解析失败、502 等临时错误自动重试
-- cron + flock 防止并发执行
-- 缺失线路记录自动创建，默认 TTL 为 1
+</div>
 
-## 相关说明
-本脚本用以拉平 CNAME 记录，当前仅支持 DNSPod、华为云DNS、阿里云 DNS。
+<p align="center">
+  <a href="README.md">English</a> |
+  <a href="README_zh.md">简体中文</a> |
+  <a href="README_zh-TW.md">繁體中文</a> |
+  <a href="README_ja.md">日本語</a>
+</p>
 
-DNSPod DNSPod DNS
+CNAMEFlattening synchronizes CDN CNAME resolution results into DNS A/AAAA records. It is designed for line-aware DNS providers and CDN scenarios where the authoritative DNS zone needs flattened records instead of a CNAME.
 
-HuaweiCloud 华为云 DNS
+## Features
 
-Aliyun 阿里云 DNS
+- Python and Go implementations for DNSPod, Huawei Cloud DNS, and Alibaba Cloud DNS.
+- Production Huawei Cloud DNS runner in `deploy/huawei_flatten.py`.
+- Line-aware A and AAAA updates using CDN answers queried with DoH and ECS subnet hints.
+- Automatic retry for Huawei Cloud API rate limits.
+- Automatic retry for transient DoH failures such as timeouts, DNS resolution failures, and 502 responses.
+- Cron-friendly wrapper with `flock` to prevent concurrent runs.
+- Optional missing-record creation and configurable TTL.
 
-请根据实际需要选择对应的脚本使用。
+## Repository Layout
 
-注意：本脚本仅测试了与腾讯云 CDN、腾讯云 EdgeOne、华为云 CDN、天翼云 CDN、阿里云 CDN 的兼容性，其他 CDN 厂商未测试兼容性，若有其他厂商需求请自行测试或提交Issue。
-## 使用教程
-该教程为 Python 版本，此处未列厂商说明可查看对于厂商文件夹下的 README.MD
+```text
+deploy/                Production Huawei Cloud DNS runner and deployment docs
+python/                Historical Python scripts for DNSPod, Huawei Cloud, and Alibaba Cloud
+go/                    Go implementations for DNSPod and Huawei Cloud
+static/                Diagrams and repository assets
+```
 
-DNSPod：[使用 DNSPod 拉平 CNAME 记录（CDN 场景）](https://r2wind.cn/articles/20230108.html)
+## Huawei Cloud Deployment
 
-华为云DNS：[使用华为云 DNS 拉平 CNAME 记录（CDN 场景）](https://r2wind.cn/articles/20230109.html)
+The maintained deployment path is documented in [deploy/README.md](deploy/README.md).
 
-部署版说明见 [deploy/README.md](deploy/README.md)。
+Typical runtime layout:
 
-## 脚本示意
-该示意为 DNSPod Python版本，其他厂商和版本流程类似。
+```text
+/opt/CNAMEFlattening/
+/usr/local/bin/huawei-cname-flatten
+/etc/cname-flattening/huawei.env
+/var/log/cname-flattening/huawei.log
+```
 
-![流程图](https://github.com/KincaidYang/CNAMEFlattening/blob/main/static/DNSPodFlattening.png)
+Cron entry:
+
+```cron
+*/5 * * * * root /usr/bin/flock -n /var/run/cname-flattening-huawei.lock /usr/local/bin/huawei-cname-flatten >> /var/log/cname-flattening/huawei.log 2>&1
+```
+
+Expected successful ending:
+
+```text
+done changed=<n> skipped=<n> errors=0
+elapsed=<seconds>s
+```
+
+## Configuration Safety
+
+Do not commit real DNS provider credentials, cloud access keys, API tokens, private keys, server addresses, or production environment files.
+
+Use environment files on the server side, for example `/etc/cname-flattening/huawei.env`, and keep `.env`, `*.env`, `*.key`, `*.pem`, `id_rsa`, logs, Python caches, and virtual environments ignored by git.
+
+The checked-in credentials in old example scripts are masked placeholders and are not usable secrets. Replace them locally before running those historical examples.
+
+## Compatibility
+
+The scripts have been used with Tencent Cloud CDN, Tencent EdgeOne, Huawei Cloud CDN, China Telecom CDN, and Alibaba Cloud CDN/DCDN style CNAME targets. Other CDN vendors may work if their CNAME answers are stable and compatible with DoH/ECS probing.
+
+## Original Guides
+
+- DNSPod: [使用 DNSPod 拉平 CNAME 记录（CDN 场景）](https://r2wind.cn/articles/20230108.html)
+- Huawei Cloud DNS: [使用华为云 DNS 拉平 CNAME 记录（CDN 场景）](https://r2wind.cn/articles/20230109.html)
+
+## Diagram
+
+The diagram below shows the DNSPod Python flow. Other providers follow the same general process.
+
+![DNSPod CNAME flattening flow](https://github.com/KincaidYang/CNAMEFlattening/blob/main/static/DNSPodFlattening.png)
+
+## License
+
+No explicit license file is included in the upstream repository. Add a license only after confirming the intended terms for the full codebase.
